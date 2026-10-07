@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Test Double Mock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: una sola escena continua; un "mundo" de fondo se desplaza con el indice y cada diapositiva entra/sale sobre el. */
+:root{
+  --bg:#0E1513; --bg2:#15201D; --fg:#EAF0EC; --mut:#9DB0A8; --acc:#F2B544; --acc-ink:#1A1203;
+  --ok:#6FD3A0; --bad:#FF8A7A; --line:#2A3B35;
+  --f-display:"Bricolage Grotesque","Trebuchet MS",sans-serif;
+  --f-body:"Instrument Sans",Verdana,sans-serif;
+  --f-mono:"JetBrains Mono","Courier New",monospace;
+  --ease-out:cubic-bezier(0.23,1,0.32,1);
+  --t:260ms;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:clamp(16px,1.55vw,22px);line-height:1.5;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+.world{position:fixed;inset:-10%;pointer-events:none;transition:transform 280ms var(--ease-out);
+  background:
+   radial-gradient(40vmax 40vmax at 20% 30%,rgba(242,181,68,.10),transparent 70%),
+   radial-gradient(50vmax 50vmax at 80% 70%,rgba(111,211,160,.08),transparent 70%),
+   linear-gradient(var(--line) 1px,transparent 1px) 0 0/72px 72px,
+   linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/72px 72px;
+  opacity:.55}
+.stage{position:fixed;inset:0}
+.s{position:absolute;inset:0;overflow-x:hidden;overflow-y:auto;visibility:hidden;opacity:0;transform:translateX(3%);
+  transition:opacity var(--t) var(--ease-out),transform var(--t) var(--ease-out),visibility 0s linear var(--t)}
+.s.prev{transform:translateX(-3%)}
+.s.on{visibility:visible;opacity:1;transform:none;transition-delay:0s}
+.in{min-height:100%;display:flex;flex-direction:column;justify-content:center;gap:clamp(16px,3vh,32px);
+  padding:max(56px,env(safe-area-inset-top)) max(20px,6vw) max(84px,calc(env(safe-area-inset-bottom) + 72px));max-width:1280px;margin:0 auto}
+.rv{opacity:0;transform:translateY(10px);transition:opacity var(--t) var(--ease-out),transform var(--t) var(--ease-out)}
+.on .rv{opacity:1;transform:none;transition-delay:calc(var(--i,0)*45ms + 60ms)}
+.eyebrow{font:500 .78rem/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--acc)}
+h1,h2{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.02em;line-height:1.02}
+h1{font-size:clamp(3rem,10vw,8.5rem);font-weight:800}
+h2{font-size:clamp(2rem,5vw,4rem);font-weight:700}
+p{margin:0;max-width:62ch;text-wrap:pretty}
+.lead{font-size:clamp(1.1rem,2.2vw,1.7rem);color:var(--fg)}
+.mut{color:var(--mut)}
+.acc{color:var(--acc)}
+code,.mono{font-family:var(--f-mono)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:clamp(12px,2vw,24px)}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:clamp(16px,2vw,28px);min-width:0;display:flex;flex-direction:column;gap:8px}
+.card h3{margin:0;font:700 1.15rem/1.2 var(--f-display)}
+.card.hl{border-color:var(--acc)}
+.kw{background:var(--acc);color:var(--acc-ink);padding:0 .3em;border-radius:4px;font-weight:600}
+.warn{border-left:3px solid var(--bad);padding:2px 0 2px 14px}
+.scroll{overflow-x:auto;min-width:0;border-radius:14px;border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:.92rem}
+th,td{text-align:left;padding:.7em 1em;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 .72rem/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mut);background:var(--bg2)}
+tr:last-child td{border-bottom:0}
+tr.mock td{background:rgba(242,181,68,.12)}
+tr.mock td:first-child{color:var(--acc)}
+td:first-child{font-weight:700;font-family:var(--f-display)}
+td code{font-size:.82em;color:var(--mut)}
+.flow{display:flex;align-items:stretch;gap:12px;flex-wrap:wrap}
+.node{flex:1 1 180px;min-width:0;background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:18px}
+.node b{font:700 1.2rem var(--f-display);display:block}
+.arrow{align-self:center;font:700 1.6rem var(--f-mono);color:var(--acc)}
+.badge{display:inline-block;font:500 .78rem/1 var(--f-mono);padding:.4em .7em;border-radius:99px;border:1px solid currentColor}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+pre{margin:0;background:#0A100E;border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow-x:auto;font:400 clamp(.74rem,1.12vw,.98rem)/1.55 var(--f-mono);min-width:0;tab-size:4}
+pre .c{color:#6F8A80}pre .k{color:#F2B544}pre .s2{color:#8FD0E8}pre .bd{background:rgba(255,138,122,.18);display:inline-block;width:100%}
+.demo{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}
+.demo .col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.cap{font:500 .72rem/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+.src{display:flex;flex-direction:column;gap:12px;padding:0;margin:0;list-style:none}
+.src li{padding:14px 0;border-bottom:1px solid var(--line)}
+.src a{color:var(--fg);font:700 1.25rem var(--f-display);text-decoration-color:var(--acc);text-underline-offset:4px;overflow-wrap:anywhere}
+.src a:focus-visible,button:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+.src small{display:block;color:var(--mut);font-size:.85rem;overflow-wrap:anywhere}
+ul.pts{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}
+ul.pts li{padding-left:1.4em;position:relative;max-width:60ch}
+ul.pts li::before{content:"";position:absolute;left:0;top:.62em;width:.6em;height:2px;background:var(--acc)}
+/* chrome */
+.bar{position:fixed;left:0;right:0;top:0;height:3px;background:transparent;z-index:5}
+.bar i{display:block;height:100%;width:100%;background:var(--acc);transform-origin:left;transform:scaleX(0);transition:transform var(--t) var(--ease-out)}
+.ctl{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));display:flex;gap:6px;align-items:center;z-index:6}
+.ctl .n{font:500 .8rem var(--f-mono);color:var(--mut);padding-inline:8px}
+button{font:500 .85rem var(--f-body);color:var(--fg);background:var(--bg2);border:1px solid var(--line);border-radius:10px;min-width:44px;min-height:44px;padding:0 12px;cursor:pointer;transition:transform 140ms var(--ease-out),border-color 140ms}
+button:active{transform:scale(.96)}
+@media (hover:hover) and (pointer:fine){button:hover{border-color:var(--acc)}}
+.who{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));font:500 .78rem var(--f-mono);color:var(--mut);z-index:6;max-width:50vw}
+.who b{color:var(--acc);font-weight:500}
+.notes{position:fixed;left:0;right:0;bottom:0;max-height:55dvh;overflow:auto;background:var(--bg2);border-top:2px solid var(--acc);padding:16px max(20px,6vw) max(20px,env(safe-area-inset-bottom));z-index:8;transform:translateY(100%);visibility:hidden;transition:transform var(--t) var(--ease-out),visibility 0s linear var(--t)}
+.notes.open{transform:none;visibility:visible;transition-delay:0s}
+.notes h4{margin:0 0 6px;font:500 .78rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--acc)}
+.notes p{max-width:80ch;white-space:pre-line}
+@media (max-width:760px){
+  .demo{grid-template-columns:minmax(0,1fr)}
+  .who{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .s,.s.prev{transform:none}
+  .world,.rv,.notes,.bar i{transition-duration:1ms}
+  .rv{transform:none}
+}
+</style>
+</head>
+<body>
+<div class="world" id="world" aria-hidden="true"></div>
+<div class="bar"><i id="bar"></i></div>
+
+<main class="stage" id="stage">
+
+<section class="s" data-who="Michael" data-time="0:30" aria-label="Portada"><div class="in">
+  <p class="eyebrow rv" style="--i:0">CS5383 · UTEC · Test doubles</p>
+  <h1 class="rv" style="--i:1">Mock<span class="acc">.</span></h1>
+  <p class="lead rv" style="--i:2">El doble de prueba que verifica comportamiento, no estado.</p>
+  <p class="mut rv" style="--i:3">Michael y Sebastián</p>
+  <aside hidden>[Michael · 0:30]
+Buenas. Somos Michael y Sebastián y hoy les contamos qué es un Mock, el doble de prueba que no mira lo que devuelve el código, sino lo que hace con sus colaboradores.
+Plan: definición, para qué sirve, cómo se distingue de Dummy, Stub, Fake y Spy, dos ejemplos y una demo en vivo con un test que falla a propósito.
+Reparto: Michael abre (portada a problema) y cierra con la demo; Sebastián lleva la comparación, los ejemplos y las conclusiones. Duración total: unos 8 minutos.</aside>
+</div></section>
+
+<section class="s" data-who="Michael" data-time="1:00" aria-label="Definición"><div class="in">
+  <p class="eyebrow rv" style="--i:0">Definición</p>
+  <h2 class="rv" style="--i:1">Un doble preprogramado con <span class="acc">expectativas</span></h2>
+  <div class="cols">
+    <div class="card rv" style="--i:2"><h3>Qué método</h3><p class="mut">Debe llamarse el método esperado.</p></div>
+    <div class="card rv" style="--i:3"><h3>Con qué argumentos</h3><p class="mut">Y con los valores correctos.</p></div>
+    <div class="card rv" style="--i:4"><h3>Cuántas veces</h3><p class="mut">Una llamada de más o de menos hace fallar el test.</p></div>
+  </div>
+  <p class="lead rv" style="--i:5">Verifica <span class="kw">comportamiento</span> (interacciones), no estado.</p>
+  <aside hidden>[Michael · 1:00]
+Un Mock es un doble de prueba preprogramado con expectativas: qué métodos deben llamarse, con qué argumentos y cuántas veces.
+Si recibe una llamada que no esperaba, o no recibe una que sí esperaba, el test falla.
+Frase clave para que se queden: el Mock verifica comportamiento, es decir interacciones; no verifica estado ni el valor de retorno.</aside>
+</div></section>
+
+<section class="s" data-who="Michael" data-time="1:00" aria-label="Problema y uso"><div class="in">
+  <p class="eyebrow rv" style="--i:0">Problema y uso</p>
+  <h2 class="rv" style="--i:1">Hay efectos que no dejan rastro en el resultado</h2>
+  <div class="cols">
+    <div class="card rv" style="--i:2"><h3>El problema</h3><p>Enviar un email, cobrar un pago, escribir un log. Un <code>assert</code> sobre el valor de retorno no los detecta.</p></div>
+    <div class="card hl rv" style="--i:3"><h3>Se usa cuando</h3>
+      <ul class="pts"><li>Importa <i>que se llame</i> a la colaboración: <code>gateway.cobrar(100)</code> una sola vez.</li><li>La dependencia es lenta, no determinista o con efectos reales (red, BD, correo).</li><li>No hay estado observable que revisar.</li></ul></div>
+  </div>
+  <p class="warn rv" style="--i:4"><b class="bad">Cuidado.</b> Acopla el test a la implementación. Si basta verificar estado, no lo uses.</p>
+  <aside hidden>[Michael · 1:00]
+El problema: hay efectos del código bajo prueba que no se ven en el valor que devuelve. Mandar un correo, cobrar un pago, escribir un log. Un assert sobre el resultado no los detecta.
+Usamos un Mock cuando lo que importa es que se llame a una colaboración, por ejemplo gateway.cobrar(100) exactamente una vez, y cuando la dependencia es lenta, no determinista o tiene efectos reales como red, base de datos o correo.
+Advertencia: el Mock acopla el test a la implementación. Si alcanza con revisar el estado, no abusen.
+Paso la palabra a Sebastián.</aside>
+</div></section>
+
+<section class="s" data-who="Sebastián" data-time="1:15" aria-label="Comparación"><div class="in">
+  <p class="eyebrow rv" style="--i:0">Comparación</p>
+  <h2 class="rv" style="--i:1">Mock frente a Dummy, Stub, Fake y Spy</h2>
+  <div class="scroll rv" style="--i:2"><table>
+    <tr><th style="width:11%">Doble</th><th style="width:30%">Qué hace</th><th style="width:27%">Qué verifica</th><th>Ejemplo</th></tr>
+    <tr><td>Dummy</td><td>Rellena un parámetro; nunca se usa</td><td>Nada</td><td><code>new Servicio(null, dummyLogger)</code></td></tr>
+    <tr><td>Stub</td><td>Devuelve respuestas enlatadas</td><td>Nada (se revisa el estado del SUT)</td><td><code>when(repo.buscar(1)).thenReturn(user)</code></td></tr>
+    <tr><td>Fake</td><td>Implementación real simplificada</td><td>Nada (se revisa el estado)</td><td><code>repo = new RepoEnMemoria()</code></td></tr>
+    <tr><td>Spy</td><td>Stub que registra cómo lo llamaron</td><td>Llamadas, después de ejecutar</td><td><code>verify(spy).enviar("hola")</code></td></tr>
+    <tr class="mock"><td>Mock</td><td>Preprogramado con expectativas</td><td>Llamadas, argumentos y veces; falla si no se cumplen</td><td><code>verify(gateway, times(1)).cobrar(100)</code></td></tr>
+  </table></div>
+  <p class="rv" style="--i:3">El Mock <span class="kw">verifica comportamiento</span>. El Stub solo devuelve datos.</p>
+  <aside hidden>[Sebastián · 1:15]
+Para ubicar al Mock entre sus primos. Dummy: rellena un parámetro y nunca se usa. Stub: devuelve respuestas enlatadas. Fake: una implementación real pero simplificada, como un repositorio en memoria. Spy: un stub que además registra cómo lo llamaron, y se verifica después de ejecutar.
+Mock: viene preprogramado con expectativas sobre llamadas, argumentos y veces, y falla si no se cumplen.
+Idea central: el Mock verifica comportamiento; el Stub solo devuelve datos.
+Según Fowler, un Mock es un tipo de Spy, un Spy es un Stub, y un Stub es un Dummy; el Fake es distinto.</aside>
+</div></section>
+
+<section class="s" data-who="Sebastián" data-time="0:45" aria-label="Ejemplo cotidiano"><div class="in">
+  <p class="eyebrow rv" style="--i:0">Ejemplo cotidiano</p>
+  <h2 class="rv" style="--i:1">El mesero y la comanda</h2>
+  <div class="flow rv" style="--i:2">
+    <div class="node"><b>Mesero</b><span class="mut">Código bajo prueba. Toma tu pedido.</span></div>
+    <span class="arrow" aria-hidden="true">→</span>
+    <div class="node" style="border-color:var(--acc)"><b class="acc">Cocina de utilería</b><span class="mut">El Mock. No cocina, solo registra qué le llegó.</span></div>
+  </div>
+  <p class="lead rv" style="--i:3">¿Entregó la comanda <span class="kw">exactamente una vez</span> y con el pedido correcto?</p>
+  <p class="mut rv" style="--i:4">Dos veces, se prepara doble. Ninguna, tu comida nunca llega. No evaluamos el plato.</p>
+  <aside hidden>[Sebastián · 0:45]
+Piensen en un restaurante. El mesero toma el pedido y debe pasarlo a cocina. No nos interesa cocinar de verdad; la cocina es un actor de utilería que solo anota qué le llegó.
+Lo que verificamos: que la comanda llegó una sola vez y con el contenido correcto. Si llega dos veces, se prepara doble; si no llega, nunca come nadie.
+Fíjense: no estamos mirando el plato, estamos mirando la interacción.</aside>
+</div></section>
+
+<section class="s" data-who="Sebastián" data-time="1:00" aria-label="Ejemplo en software"><div class="in">
+  <p class="eyebrow rv" style="--i:0">Ejemplo en software</p>
+  <h2 class="rv" style="--i:1">Confirmar una orden envía un correo</h2>
+  <pre class="rv" style="--i:2"><span class="k">from</span> unittest.mock <span class="k">import</span> Mock
+
+<span class="k">def</span> test_confirmar_orden_envia_un_correo():
+    email = Mock()                    <span class="c"># no envía nada real</span>
+    service = OrderService(email_service=email)
+
+    service.confirm(Order(id=1, customer=<span class="s2">"ana@mail.com"</span>))
+
+    email.send.assert_called_once_with(
+        to=<span class="s2">"ana@mail.com"</span>, subject=<span class="s2">"Pedido 1 confirmado"</span>
+    )</pre>
+  <p class="rv" style="--i:3">Sin el mock, cada corrida enviaría correos reales: spam, costos y tests lentos. Con el mock, el test es <span class="kw">rápido, determinista y aislado</span>.</p>
+  <aside hidden>[Sebastián · 1:00]
+OrderService debe avisar al cliente cuando se confirma una compra, llamando a EmailService.send. En el test reemplazamos EmailService por un Mock.
+Ejecutamos confirm y después verificamos con assert_called_once_with: una sola llamada, al correo y con el asunto correctos.
+Qué evita: sin el mock, cada ejecución de la suite mandaría correos reales a clientes, con costo, lentitud y dependencia de la red o del SMTP.
+Lo que verificamos es una interacción, no un valor de retorno. Michael nos muestra esto corriendo.</aside>
+</div></section>
+
+<section class="s" data-who="Michael" data-time="1:30" aria-label="Código de la demo"><div class="in" style="gap:14px">
+  <p class="eyebrow rv" style="--i:0">Demo · demo_mock.py</p>
+  <div class="demo rv" style="--i:1">
+    <div class="col">
+      <span class="cap">Código</span>
+<pre><span class="k">class</span> OrderService:
+    <span class="k">def</span> __init__(self, email):
+        self.email = email
+    <span class="k">def</span> place(self, user, total):
+        <span class="k">if</span> total &lt;= 0:
+            <span class="k">return</span> False
+        self.email.send(user, f<span class="s2">"Pedido de {total} confirmado"</span>)
+        <span class="k">return</span> True
+
+<span class="c"># setUp: self.email = Mock()</span>
+<span class="k">def</span> test_pedido_valido_envia_correo(self):      <span class="c"># PASA</span>
+    self.svc.place(<span class="s2">"ana@x.com"</span>, 50)
+    self.email.send.assert_called_once_with(
+        <span class="s2">"ana@x.com"</span>, <span class="s2">"Pedido de 50 confirmado"</span>)
+
+<span class="k">def</span> test_pedido_invalido_no_envia(self):       <span class="c"># PASA</span>
+    self.svc.place(<span class="s2">"ana@x.com"</span>, 0)
+    self.email.send.assert_not_called()
+
+<span class="k">def</span> test_falla_a_proposito(self):              <span class="c"># FALLA</span>
+    self.svc.place(<span class="s2">"ana@x.com"</span>, 50)
+<span class="bd">    self.assertEqual(self.email.send.call_count, 2)</span></pre>
+    </div>
+    <div class="col">
+      <span class="cap">Salida</span>
+<pre>test_falla_a_proposito ... <span class="bad">FAIL</span>
+test_pedido_invalido_no_envia ... <span class="ok">ok</span>
+test_pedido_valido_envia_correo ... <span class="ok">ok</span>
+
+<span class="bad">AssertionError: 1 != 2</span>
+
+Ran 3 tests in 0.001s
+<span class="bad">FAILED (failures=1)</span></pre>
+      <p class="mut" style="font-size:.92rem">Esperaba 2 envíos, hubo 1. El Mock contó las llamadas.</p>
+    </div>
+  </div>
+  <aside hidden>[Michael · 1:30]
+Demo con unittest.mock. OrderService recibe el servicio de correo inyectado. Si el total es cero o negativo no envía; si es válido, envía un correo.
+Test 1: pedido válido, verifica que send se llamó una vez con esos argumentos. Pasa.
+Test 2: pedido inválido, verifica assert_not_called. Pasa.
+Test 3 es el que falla a propósito: ejecutamos un solo pedido pero esperamos dos envíos. Salida: AssertionError 1 distinto de 2, FAILED con una falla.
+Lo importante: el test falla por comportamiento, por la cantidad de llamadas, no por ningún valor de retorno. Ese es el trabajo del Mock.
+(Si hay tiempo, correr python demo_mock.py en vivo.) Paso a Sebastián para cerrar.</aside>
+</div></section>
+
+<section class="s" data-who="Sebastián" data-time="0:45" aria-label="Conclusiones"><div class="in">
+  <p class="eyebrow rv" style="--i:0">Conclusiones</p>
+  <h2 class="rv" style="--i:1">Un Mock responde: ¿se colaboró como se esperaba?</h2>
+  <ul class="pts">
+    <li class="rv" style="--i:2">Verifica llamadas, argumentos y veces. No estado.</li>
+    <li class="rv" style="--i:3">Útil cuando el efecto no aparece en el resultado y la dependencia es lenta o real.</li>
+    <li class="rv" style="--i:4">Si basta mirar el estado, prefiere Stub o Fake. Un Mock de más acopla el test a la implementación.</li>
+  </ul>
+  <aside hidden>[Sebastián · 0:45]
+Para cerrar. Un Mock responde a una pregunta: ¿el código colaboró como esperábamos? Verifica llamadas, argumentos y cantidad de veces, no estado.
+Es útil cuando el efecto no se ve en el resultado y la dependencia es lenta, no determinista o tiene efectos reales.
+Y la advertencia final: si basta mirar el estado, usen Stub o Fake; demasiados mocks atan el test a la implementación.
+Gracias. Quedamos atentos a preguntas.</aside>
+</div></section>
+
+<section class="s" data-who="Michael" data-time="0:15" aria-label="Fuentes"><div class="in">
+  <p class="eyebrow rv" style="--i:0">Fuentes</p>
+  <h2 class="rv" style="--i:1">Para seguir leyendo</h2>
+  <ul class="src rv" style="--i:2">
+    <li><a href="https://martinfowler.com/articles/mocksArentStubs.html" target="_blank" rel="noopener">Fowler, Mocks Aren't Stubs</a><small>martinfowler.com/articles/mocksArentStubs.html</small></li>
+    <li><a href="https://martinfowler.com/bliki/TestDouble.html" target="_blank" rel="noopener">Fowler, Test Double</a><small>martinfowler.com/bliki/TestDouble.html</small></li>
+    <li><a href="https://blog.cleancoder.com/uncle-bob/2014/05/14/TheLittleMocker.html" target="_blank" rel="noopener">Martin, The Little Mocker</a><small>blog.cleancoder.com/uncle-bob/2014/05/14/TheLittleMocker.html</small></li>
+    <li><span style="font:700 1.25rem var(--f-display)">Meszaros, xUnit Test Patterns</span><small>Libro (Addison-Wesley, 2007). Capítulo Test Double Patterns.</small></li>
+  </ul>
+  <aside hidden>[Michael · 0:15]
+Estas son las fuentes: los dos textos de Fowler, The Little Mocker de Robert Martin y el libro xUnit Test Patterns de Meszaros, de donde sale el vocabulario. Gracias.</aside>
+</div></section>
+
+</main>
+
+<div class="who" id="who" aria-live="polite"></div>
+<div class="ctl">
+  <span class="n" id="n"></span>
+  <button id="bn" aria-pressed="false" title="Notas del orador (N)">Notas</button>
+  <button id="bp" aria-label="Anterior">←</button>
+  <button id="bx" aria-label="Siguiente">→</button>
+</div>
+<div class="notes" id="notes" role="region" aria-label="Notas del orador"><h4 id="nh"></h4><p id="nt"></p></div>
+
+<script>
+(function(){
+  var S=[].slice.call(document.querySelectorAll('.s')),i=0,
+      $=function(id){return document.getElementById(id)},
+      reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var notes=S.map(function(s){var a=s.querySelector('aside');return a?a.textContent.trim():''});
+  function go(n,silent){
+    n=Math.max(0,Math.min(S.length-1,n));i=n;
+    S.forEach(function(s,k){s.classList.toggle('on',k===n);s.classList.toggle('prev',k<n);if(k===n)s.scrollTop=0});
+    $('world').style.transform=reduce?'none':'translate3d('+(-n*5)+'vw,'+(-n*2.5)+'vh,0)';
+    $('bar').style.transform='scaleX('+((n+1)/S.length)+')';
+    $('n').textContent=(n+1)+' / '+S.length;
+    var d=S[n].dataset;$('who').innerHTML='<b>'+d.who+'</b> · '+d.time;
+    $('nh').textContent=d.who+' · '+d.time;$('nt').textContent=notes[n];
+    try{history.replaceState(null,'','#'+(n+1))}catch(e){}
+  }
+  function nt(f){var o=$('notes');f=(f===undefined)?!o.classList.contains('open'):f;o.classList.toggle('open',f);$('bn').setAttribute('aria-pressed',f)}
+  addEventListener('keydown',function(e){
+    if(e.metaKey||e.ctrlKey||e.altKey)return;var k=e.key;
+    if(k==='ArrowRight'||k==='PageDown'||k===' '||k==='Enter'){if(e.target.tagName==='A'&&k==='Enter')return;e.preventDefault();go(i+1)}
+    else if(k==='ArrowLeft'||k==='PageUp'||k==='Backspace'){e.preventDefault();go(i-1)}
+    else if(k==='Home')go(0);else if(k==='End')go(S.length-1);
+    else if(k==='n'||k==='N')nt();else if(k==='Escape')nt(false);
+  });
+  $('bx').onclick=function(){go(i+1)};$('bp').onclick=function(){go(i-1)};$('bn').onclick=function(){nt()};
+  var x0,y0,t0;
+  addEventListener('touchstart',function(e){var t=e.touches[0];x0=t.clientX;y0=t.clientY;t0=Date.now()},{passive:true});
+  addEventListener('touchend',function(e){
+    if(x0==null||e.target.closest('pre,.scroll,.notes'))return;var t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0;x0=null;
+    if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5)go(i+(dx<0?1:-1));
+  },{passive:true});
+  var h=parseInt(location.hash.slice(1),10);go(h>0?h-1:0);
+})();
+</script>
+</body>
+</html>

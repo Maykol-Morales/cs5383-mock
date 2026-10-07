@@ -1,4 +1,4 @@
-# codigo-mock
+# cs5383-mock
 
 > Tarea del curso **CS5383 – Verificación y Pruebas de Software** · UTEC
 
